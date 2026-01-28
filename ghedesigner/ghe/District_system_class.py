@@ -13,6 +13,10 @@ from ghedesigner.utilities import eskilson_log_times
 from OpenGL.GL import *
 from OpenGL_2D_class_GLFW import gl2D, gl2DCircle, gl2DText,gl2DArrow, gl2DArc
 
+#for trying scipy solver
+from scipy.sparse import csc_matrix
+from scipy.sparse.linalg import spsolve
+
 from types import SimpleNamespace
 
 import json
@@ -1008,7 +1012,13 @@ class GHEHPSystem:
             A = np.array(matrix_rows, dtype=float)
             B = np.array(matrix_rhs, dtype=float)
 
-            X = np.linalg.solve(A, B)
+            #X = np.linalg.solve(A, B)
+
+            #trying scipy
+            A_sp = csc_matrix(A)
+            X = spsolve(A_sp, B)
+
+
 
             # for extracting (assigning) values for 1-pipe and 2-pipe systems
             if self.configuration == "1-pipe":
