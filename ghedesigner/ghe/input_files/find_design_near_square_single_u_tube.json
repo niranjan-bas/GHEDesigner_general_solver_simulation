@@ -37,19 +37,16 @@
       },
       "geometric_constraints": {
         "length": 100,
-        "width": 100,
-        "b_min": 5,
-        "b_max_x": 5,
-        "b_max_y": 5,
+        "b": 5,
         "max_height": 135,
         "min_height": 60,
-        "method": "BIRECTANGLE"
+        "method": "NEARSQUARE"
       },
       "design": {
-        "flow_rate": 0.3375,
+        "flow_rate": 0.5,
         "flow_type": "BOREHOLE",
-        "max_eft": 35,
-        "min_eft": 5
+        "max_eft": 20.1,
+        "min_eft": -2
       },
       "loads": [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

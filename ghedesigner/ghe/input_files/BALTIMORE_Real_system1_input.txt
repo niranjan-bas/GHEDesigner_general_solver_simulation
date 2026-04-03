@@ -1,0 +1,119 @@
+# This is an input file for simulation of multiple GHE-HP system (one pipe system without pumping station)
+
+Title, '3ghe-6hp system'
+# Ground heat exchanger data
+
+configuration, '1-pipe'
+
+# Building Data
+
+# keyword, name,            id, zoneID
+Building, Hospital, 	    B1, b1z1, b1z2
+Building, Midriseapartment, B2, b2z1, b2z2
+Building, Mediumoffice,     B3, b3z1, b3z2
+
+
+# Zone data
+
+# keyword, name,            ISHX_ID,  id,    inlet_nodeID,  oulet_nodeID,  HPmodel,  loads_file
+Zone,      space_htg/clg,   None,     b1z1,  n2,            None,          HP1,      building_loads/B1Z1_BALTIMORE.csv
+Zone,      space_htg/clg,   None,     b1z2,  n4,            None,          HP4,      building_loads/B1Z2_BALTIMORE.csv
+Zone,      space_htg/clg,   None,     b2z1,  n9,            None,          HP2,      building_loads/B2Z1_BALTIMORE.csv
+Zone,      water_htg,       None,     b2z2,  n11,           None,          HP4,      building_loads/B2Z2_BALTIMORE.csv
+Zone,      water_htg,       None,     b3z1,  n15,           None,          HP3,      building_loads/B3Z1_BALTIMORE.csv
+Zone,      water_htg,       None,     b3z2,  n17,           None,          HP4,      building_loads/B3Z2_BALTIMORE.csv
+
+
+#  keyword, id,    inlet_nodeID, outlet_nodeID, n_rows, n_cols, row_spacing (m), col_spacing (m),  height     m_flow_ghe_design
+GHE,        ghe1,  n6,          None,          15,     10,     5,               5, 		   110,       50.63
+GHE,        ghe2,  n13,          None,          10,     8,      5,               5,                110,       27
+GHE,        ghe3,  n19,          None,          10,     7,      5,               5,                110,       23.63
+
+
+# nodes data
+# keyword, id,   type,          x,   y,   z
+node,      n1,   branching,     190, 156, 0
+node,      n2,   device_in,     200, 156, 0
+node,      n3,   branching,     190, 129, 0
+node,      n4,   device_in,     200, 129, 0
+node,      n5,   branching,     190, 90,  0
+node,      n6,   device_in,     200, 90,  0
+node,      n7,   simple,        190, 15,  0
+node,      n8,   branching,     182, 15,  0
+node,      n9,   device_in,     182, 0,   0
+node,      n10,  branching,     167, 15,  0
+node,      n11,  device_in,     167, 0,   0
+node,      n12,  branching,     140, 15,  0
+node,      n13,  device_in,     140, 5,   0
+node,      n14,  branching,     61,  15,  0
+node,      n15,  device_in,     61,  5,   0
+node,      n16,  branching,     44,  15,  0
+node,      n17,  device_in,     44,  5,   0
+node,      n18,  branching,     17,  15,  0
+node,      n19,  device_in,     17,  0,   0
+node,      n20,  simple,        0,   15,  0
+node,      n21,  simple,        0,   65,  0
+node,      n22,  simple,        170, 65,  0
+node,      n23,  simple,        170, 170, 0
+node,      n24,  simple,        190, 170, 0
+
+# Pipes Data
+
+# keyword, id,   type         node_in_name    node_out_name,    length
+pipe,      p1,   branch,      n1,             n2,               10
+pipe,      p2,   main,        n1,             n3,               27
+pipe,      p3,   branch,      n3,             n4,               10
+pipe,      p4,   main,        n3,             n5,               39
+pipe,      p5,   branch,      n5,             n6,               10
+pipe,      p6,   main,        n5,             n7,               75
+pipe,      p7,   main,        n7,             n8,               8
+pipe,      p8,   branch,      n8,             n9,               15
+pipe,      p9,   main,        n8,             n10,              15
+pipe,      p10,  branch,      n10,            n11,              15
+pipe,      p11,  main,        n10,            n12,              27
+pipe,      p12,  branch,      n12,            n13,              10
+pipe,      p13,  main,        n12,            n14,              79
+pipe,      p14,  branch,      n14,            n15,              10
+pipe,      p15,  main,        n14,            n16,              17
+pipe,      p16,  branch,      n16,            n17,              10
+pipe,      p17,  main,        n16,            n18,              27
+pipe,      p18,  branch,      n18,            n19,              15
+pipe,      p19,  main,        n18,            n20,              17
+pipe,      p20,  main,        n20,            n21,              50
+pipe,      p21,  main,        n21,            n22,              170
+pipe,      p22,  main,        n22,            n23,              105
+pipe,      p23,  main,        n23,            n24,              20
+pipe,      p24,  main,        n24,            n1,               14
+
+# Heat Pump Model Library
+
+# keyword, name,   id,   a_htg,     b_htg,   c_htg, a_clg,   b_clg,   c_clg, c1_htg, c2_htg, c3_htg, c1_clg,  c2_clg, c3_clg, m_single_hp, delta_P_HP
+HPmodel,   HP_AtW, HP1, -0.0000713, 0.00534, 0.734, 0.0001,  0.00112, 1.13, -0.124,  112,    4114,  -0.393,  -30.3,   6777,   0.296,       46000
+HPmodel,   HP_AtW, HP2, -0.0000786, 0.00539, 0.734, 0.0001, -0.00041, 1.15,  0.178,  158,    6712,  -1.2,    -4.72,   9629,   0.495,       30000
+HPmodel,   HP_AtW, HP3, -0.000068, 0.00497,  0.738, 0.0001, -0.00084, 1.16,  0.091,  224,    9422,  -2.16,    46.8,   12397,  0.693,       19000
+HPmodel,   HP_WtW, HP4, -0.0000606, 0.0051,  0.692, 0,       0,       0,    -1.19,   212,    8932,   0,       0,      0,      0.425,       50000
+
+# System constants
+
+# keyword,            CL_P/m,          delta_P_ref_ISHX
+pressure_drop,         100,                      50000
+
+# keyword,       beta_CL_flow,   beta_ISHX_HP_flow,    beta_ISHX_N_flow,     beta_HP_delta_P,    beta_GHE_delta_P,     beta_ISHX_delta_P
+beta,            1.5,            1.5,                   1.0,                   1.2,                1.2,                  1.2
+
+# Circulating pump efficiency
+
+# keyword,      HP_cp_efficiency,    ISHX_cp_efficiency,   GHE_cp_efficiency,     CL_efficiency
+efficiency,     0.2,                 0.2,                  0.2,                   0.2
+
+# length of central loop
+length,        690
+
+
+
+
+
+
+
+
+

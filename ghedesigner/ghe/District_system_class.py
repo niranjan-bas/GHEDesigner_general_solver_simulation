@@ -13,16 +13,14 @@ from ghedesigner.utilities import eskilson_log_times
 from OpenGL.GL import *
 from OpenGL_2D_class_GLFW import gl2D, gl2DCircle, gl2DText,gl2DArrow, gl2DArc
 
-#for trying scipy solver
-from scipy.sparse import csc_matrix
-from scipy.sparse.linalg import spsolve
-
-from types import SimpleNamespace
-
-import json
-import time
-
-start = time.time()
+# import scipy as sp
+#
+# # for trying scipy.sparse solver
+# from scipy.sparse import csc_matrix
+# from scipy.sparse.linalg import spsolve
+# 
+# # for applying LU factorization
+# from scipy.linalg import lu_factor, lu_solve
 
 class GHE:
     def __init__(self):
@@ -65,8 +63,10 @@ class GHE:
 
         self.mass_flow_ghe_design = None
         self.mass_flow_ghe_borehole_design = None
+        self.m_ghe_array = None
         self.H_n_ghe = None
         self.total_values_ghe = None
+
 
         # for output
         self.t_eft = None
@@ -142,6 +142,7 @@ class GHE:
             self.bhe.lntts.tolist(),
             self.bhe.g_bhw.tolist(),
         )
+
         return g, g_bhw
 
     def calculation_of_ghe_constant_c_n(self, g, ts, time_array, n_timesteps, bhe_effective_resist):
@@ -158,6 +159,8 @@ class GHE:
             delta_log_time = np.log((time_array[i] - time_array[i - 1]) / (ts / 3600.0))
             g_val = g(delta_log_time)
             c_n[i] = (1 / two_pi_k * g_val) + bhe_effective_resist
+
+            #print(f"Step {i}: g_val = {g_val}, bh_effective_resist = {bhe_effective_resist}")
 
         return c_n
 
@@ -275,6 +278,7 @@ class Zone:
         self.df_zone = None
         self.upstream_device = None
         self.downstream_device = None
+        self.m_zone_array = None
 
         self.P_zone_htg = None
         self.P_zone_clg = None
@@ -286,27 +290,56 @@ class Zone:
 
         self.h = None
         self.c = None
+        self.q_net_c = None
         self.ISHX_ID = None
         self.inlet_index = None
 
-    def q_net_clg(self):
-        """
-        Calculate net heat extracted/rejected each hour for the zone.
-        If either column is missing, default to zeros.
-        """
-        if "HPHtgLd_W" in self.df_zone.columns:
-            self.h = np.array(self.df_zone["HPHtgLd_W"])
-        else:
-            self.h = np.zeros(len(self.df_zone))
+    # def q_net_clg(self):
+    #     """
+    #     Calculate net heat extracted/rejected each hour for the zone.
+    #     If either column is missing, default to zeros.
+    #     """
+    #     if "HPHtgLd_W" in self.df_zone.columns:
+    #         self.h = np.array(self.df_zone["HPHtgLd_W"])
+    #     else:
+    #         self.h = np.zeros(len(self.df_zone))
+    #
+    #     if "HPClgLd_W" in self.df_zone.columns:
+    #         self.c = np.array(self.df_zone["HPClgLd_W"])
+    #     else:
+    #         self.c = np.zeros(len(self.df_zone))
+    #
+    #     return self.c - self.h
 
-        if "HPClgLd_W" in self.df_zone.columns:
-            self.c = np.array(self.df_zone["HPClgLd_W"])
+    def initialize_load_arrays(self, n_years, method):
+        """
+        Read load columns once and store all arrays for later timestep access.
+        """
+        if "HPHtgLd_W" in self.loads_file.columns:
+            h_1yr = self.loads_file["HPHtgLd_W"].to_numpy(dtype=float)
         else:
-            self.c = np.zeros(len(self.df_zone))
+            h_1yr = np.zeros(len(self.loads_file), dtype=float)
 
-        return self.c - self.h
+        if "HPClgLd_W" in self.loads_file.columns:
+            c_1yr = self.loads_file["HPClgLd_W"].to_numpy(dtype=float)
+        else:
+            c_1yr = np.zeros(len(self.loads_file), dtype=float)
+
+        h_full = np.tile(h_1yr, n_years)
+        c_full = np.tile(c_1yr, n_years)
+
+        if method == "HOURLY":
+            # Prepend zero at timestep 0
+            self.h = np.insert(h_full, 0, 0.0)
+            self.c = np.insert(c_full, 0, 0.0)
+        else:
+            self.h = h_full
+            self.c = c_full
+
+        self.q_net_c = np.abs(self.c) - np.abs(self.h)
 
     def zone_mass_flow_rate(self, t_eft, i):
+
         hp = self.HP
         cap_htg = hp.c1_htg * t_eft ** 2 + hp.c2_htg * t_eft + hp.c3_htg
         cap_clg = hp.c1_clg * t_eft ** 2 + hp.c2_clg * t_eft + hp.c3_clg
@@ -326,9 +359,9 @@ class Zone:
         Calculate r1 and r2 for this zone based on entering fluid temperature and HP coefficients.
         """
 
-        # Extract loads
-        h = self.df_zone["HPHtgLd_W"].iloc[hour_index] if "HPHtgLd_W" in self.df_zone.columns else 0.0
-        c = self.df_zone["HPClgLd_W"].iloc[hour_index] if "HPClgLd_W" in self.df_zone.columns else 0.0
+        # # Extract loads
+        # h = self.df_zone["HPHtgLd_W"].iloc[hour_index] if "HPHtgLd_W" in self.df_zone.columns else 0.0
+        # c = self.df_zone["HPClgLd_W"].iloc[hour_index] if "HPClgLd_W" in self.df_zone.columns else 0.0
 
         # Extract HP coefficients
         a_htg = self.HP.a_htg
@@ -351,9 +384,9 @@ class Zone:
         a = ratio_clg - slope_clg * t_eft
         b = slope_clg
 
-        # Final arrays
-        r1 = b * c - v * h
-        r2 = a * c - u * h
+        # Final scalars r1 and r2
+        r1 = b * self.c[hour_index] - v * self.h[hour_index]
+        r2 = a * self.c[hour_index] - u * self.h[hour_index]
 
         return r1, r2
 
@@ -414,9 +447,9 @@ class Zone:
 
     def zone_energy_consumption(self, t_eft, i, m_flow_zone, density, cp_efficiency, beta_HP_delta_P, delta_P_HP):
 
-        # Extract loads
-        htg_load = self.df_zone["HPHtgLd_W"].iloc[i] if "HPHtgLd_W" in self.df_zone.columns else 0.0
-        clg_load = self.df_zone["HPClgLd_W"].iloc[i] if "HPClgLd_W" in self.df_zone.columns else 0.0
+        # # Extract loads
+        # htg_load = self.df_zone["HPHtgLd_W"].iloc[i] if "HPHtgLd_W" in self.df_zone.columns else 0.0
+        # clg_load = self.df_zone["HPClgLd_W"].iloc[i] if "HPClgLd_W" in self.df_zone.columns else 0.0
 
         # Extract HP coefficients
         a_htg = self.HP.a_htg
@@ -431,8 +464,8 @@ class Zone:
         ratio_clg = a_clg * t_eft ** 2 + b_clg * t_eft + c_clg
 
         # zone (HP) power consumed
-        Power_zone_htg = htg_load * (1-ratio_htg)
-        Power_zone_clg = clg_load * (ratio_clg - 1)
+        Power_zone_htg = self.h[i] * (1-ratio_htg)
+        Power_zone_clg = self.c[i] * (ratio_clg - 1)
 
         # power consumed by circulating pump
         Power_zone_cp = m_flow_zone / (density * cp_efficiency) * beta_HP_delta_P * delta_P_HP
@@ -586,6 +619,7 @@ class GHEHPSystem:
         self.bhe_eq = None
         self.c_n = None
         self.m_loop = None
+        self.m_loop_array = None
         self.beta_CL_flow = None
         self.beta_ISHX_loop = None
         self.beta_cl_cp_delta_P = None
@@ -602,6 +636,8 @@ class GHEHPSystem:
         self.beta_HP_delta_P = None
         self.P_cl_cp = None
         self.CL_P_per_m = None
+        self.n_years = 1
+        self.method = "HOURLY"
 
     def read_GHEHPSystem_data(self, data):
         next_matrix_line = 0
@@ -638,21 +674,52 @@ class GHEHPSystem:
                 self.buildings.append(thisbuilding)
 
             if keyword == 'zone':
-                df = pd.read_csv(cells[7])
-                self.time_array = df['Hours'].values
-                self.time_array_size = len(self.time_array)
+                if self.method == "HOURLY":
+                    df = pd.read_csv(cells[7])
+                    hours_per_year = len(df)
 
-                thiszone = Zone()
-                thiszone.name = str(cells[1])
-                thiszone.ISHX_ID = str(cells[2])
-                thiszone.ID = str(cells[3])
-                thiszone.inlet_nodeID = str(cells[4])
-                thiszone.outlet_nodeID = str(cells[5])
-                thiszone.HPmodel = str(cells[6])
-                thiszone.loads_file = pd.read_csv(cells[7])
-                thiszone.matrix_line = next_matrix_line
-                next_matrix_line += 1
-                self.zones.append(thiszone)
+                    # self.time_array = df['Hours'].values
+                    # self.time_array_size = len(self.time_array)
+
+                    self.time_array = np.arange(0, hours_per_year * self.n_years + 1, dtype=float)
+                    self.time_array_size = len(self.time_array)
+
+                    thiszone = Zone()
+                    #thiszone.time_array = df['Hours'].values
+                    thiszone.time_array = self.time_array
+                    thiszone.time_array_size = len(thiszone.time_array)
+                    thiszone.name = str(cells[1])
+                    thiszone.ISHX_ID = str(cells[2])
+                    thiszone.ID = str(cells[3])
+                    thiszone.inlet_nodeID = str(cells[4])
+                    thiszone.outlet_nodeID = str(cells[5])
+                    thiszone.HPmodel = str(cells[6])
+                    thiszone.loads_file = df
+                    thiszone.matrix_line = next_matrix_line
+                    next_matrix_line += 1
+                    thiszone.initialize_load_arrays(n_years=self.n_years,method=self.method)
+                    self.zones.append(thiszone)
+
+                elif self.method == "HYBRID":
+                    df = pd.read_csv(cells[7])
+
+                    self.time_array = df['Hours'].values.astype(float)
+                    self.time_array_size = len(self.time_array)
+
+                    thiszone = Zone()
+                    thiszone.time_array = self.time_array
+                    thiszone.time_array_size = len(thiszone.time_array)
+                    thiszone.name = str(cells[1])
+                    thiszone.ISHX_ID = str(cells[2])
+                    thiszone.ID = str(cells[3])
+                    thiszone.inlet_nodeID = str(cells[4])
+                    thiszone.outlet_nodeID = str(cells[5])
+                    thiszone.HPmodel = str(cells[6])
+                    thiszone.loads_file = df
+                    thiszone.matrix_line = next_matrix_line
+                    next_matrix_line += 1
+                    thiszone.initialize_load_arrays(n_years=self.n_years, method=self.method)
+                    self.zones.append(thiszone)
 
             if keyword == 'ishx':
                 thisishx = IsolationHX()
@@ -803,6 +870,7 @@ class GHEHPSystem:
                                      GHE.pipe, GHE.grout, GHE.soil)
             GHE.bhe_eq = GHE.bhe.to_single()
             GHE.bhe_eq.calc_sts_g_functions()
+
             log_time = eskilson_log_times()
             self.gFunction = GHE.compute_g_functions()
             ts = GHE.bhe_eq.t_s
@@ -824,6 +892,7 @@ class GHEHPSystem:
             zone.t_eft = np.full(n_timesteps, tg)
             zone.t_exft = np.full(n_timesteps, tg)
             zone.t_merging_node = np.full(n_timesteps, tg)
+            zone.m_zone_array = np.zeros(n_timesteps)
 
         for GHE in self.GHEs:
             GHE.t_eft = np.full(n_timesteps, tg)
@@ -832,11 +901,15 @@ class GHEHPSystem:
             GHE.q_ghe = np.zeros(n_timesteps)
             GHE.t_exft = np.full(n_timesteps, tg)
             GHE.t_merging_node = np.full(n_timesteps, tg)
+            GHE.m_ghe_array = np.zeros(n_timesteps)
 
         for ISHX in self.ISHXs:
             ISHX.t_n_eft = np.full(n_timesteps, tg)
             ISHX.t_n_exft = np.full(n_timesteps, tg)
             ISHX.t_hp_eft = np.full(n_timesteps, tg)
+
+        # Initializing
+        self.m_loop_array = np.zeros(n_timesteps)
 
         # Assigning row_indices
         if configuration == "1-pipe":
@@ -858,8 +931,6 @@ class GHEHPSystem:
         else:
             raise ValueError(f"Invalid configuration type: {configuration}")
 
-        # Initializing
-        m_loop_array = np.zeros(n_timesteps)
         for ISHX in self.ISHXs:
             ISHX.m_loop_ISHX_array = np.zeros(n_timesteps)
 
@@ -899,6 +970,8 @@ class GHEHPSystem:
         else:
             raise ValueError(f"Invalid configuration type: {configuration}")
 
+        # Time marching begins here
+
         for i in range(1, n_timesteps):  # loop over all timestep
             matrix_rows = []
             matrix_rhs = []
@@ -909,9 +982,10 @@ class GHEHPSystem:
                 for zone in self.zones:
                     if zone in ISHX.zones:
                         t_eft = zone.t_eft[i - 1]
-                        zone.df_zone = zone.loads_file
-                        q_net_clg = zone.q_net_clg()
+                        #zone.df_zone = zone.loads_file
+                        #q_net_clg = zone.q_net_clg()
                         m_zone = zone.zone_mass_flow_rate(t_eft, i)
+                        zone.m_zone_array[i] = m_zone
                         total_hp_flow_ISHX += m_zone
                         ISHX.m_loop_hp = total_hp_flow_ISHX * self.beta_ISHX_HP_flow
 
@@ -920,9 +994,10 @@ class GHEHPSystem:
             for zone in self.zones:
                 if zone.ISHX_ID == "None":
                     t_eft = zone.t_eft[i - 1]
-                    zone.df_zone = zone.loads_file
-                    q_net_clg = zone.q_net_clg()
+                    # zone.df_zone = zone.loads_file
+                    # q_net_clg = zone.q_net_clg()
                     m_zone = zone.zone_mass_flow_rate(t_eft, i)
+                    zone.m_zone_array[i] = m_zone
                     total_hp_flow += m_zone
 
             total_m_loop_n = 0
@@ -932,7 +1007,7 @@ class GHEHPSystem:
                 ISHX.m_loop_ISHX_array[i] = total_m_loop_n
 
             m_loop = (total_m_loop_n + total_hp_flow) * self.beta_CL_flow
-            m_loop_array[i] = m_loop
+            self.m_loop_array[i] = m_loop
 
             # Generating matrix for zones connected to ISHX
             m_loop_zone = 0
@@ -942,7 +1017,7 @@ class GHEHPSystem:
                         m_loop = ISHX.m_loop_hp
                         t_eft = zone.t_eft[i - 1]
                         r1, r2 = zone.calculate_r1_r2(t_eft, i)
-                        q_net_clg = zone.q_net_clg()
+                        #q_net_clg = zone.q_net_clg()
                         mass_flow_zone = zone.zone_mass_flow_rate(t_eft, i)
                         m_loop_zone += mass_flow_zone
                         this_zone_row, rhs = zone.generate_zone_matrix_row(matrix_size, zone.inlet_index, r1,
@@ -983,6 +1058,7 @@ class GHEHPSystem:
                 GHE.nbh = len(GHE.gFunction.bore_locations)
                 split_ratio = GHE.nbh / nbh_total
                 mass_flow_ghe = m_loop * split_ratio
+                GHE.m_ghe_array[i] = mass_flow_ghe
                 c_n = GHE.c_n  # this is array, while using this in matrix we pick c_n[i], a single float number
                 H_n_ghe = GHE.compute_history_term(i, time_array, ts, two_pi_k, GHE.g, tg, GHE.H_n_ghe,
                                                    GHE.total_values_ghe, q_ghe)
@@ -1008,17 +1084,30 @@ class GHEHPSystem:
                     matrix_rows.append(row)
                     matrix_rhs.append(rhs)
 
-            # Solve the matrix
+            # Solve the matrix using numpy.linalg.solve
             A = np.array(matrix_rows, dtype=float)
             B = np.array(matrix_rhs, dtype=float)
+            X = np.linalg.solve(A, B)
 
-            #X = np.linalg.solve(A, B)
+            # Solve the matrix using scipy.sparse.linalg
+            # A = np.array(matrix_rows, dtype=float)
+            # B = np.array(matrix_rhs, dtype=float)
+            #
+            # A_sp = csc_matrix(A)
+            # X = spsolve(A_sp, B)
 
-            #trying scipy
-            A_sp = csc_matrix(A)
-            X = spsolve(A_sp, B)
+            #Solve the matrix using scipy.linalg.solve
+            # A = np.array(matrix_rows, dtype=float)
+            # B = np.array(matrix_rhs, dtype=float)
+            #
+            # X = sp.linalg.solve(A, B)
 
-
+            # # Solve the matrix using scipy LU factorization
+            # A = np.array(matrix_rows, dtype=float)
+            # B = np.array(matrix_rhs, dtype=float)
+            #
+            # lu, piv = lu_factor(A)
+            # X = lu_solve((lu, piv), B)
 
             # for extracting (assigning) values for 1-pipe and 2-pipe systems
             if self.configuration == "1-pipe":
@@ -1059,7 +1148,7 @@ class GHEHPSystem:
 
             # zone energy consumption
             for zone in self.zones:
-                q_net_clg = zone.q_net_clg()
+                #q_net_clg = zone.q_net_clg()
                 t_eft = zone.t_eft[i - 1]
                 m_flow_zone = zone.zone_mass_flow_rate(t_eft, i)
                 cp_efficiency = self.HP_cp_efficiency
@@ -1086,11 +1175,11 @@ class GHEHPSystem:
                 GHE.P_ghe_cp[i] = mass_flow_ghe / (density * self.GHE_cp_efficiency) * delta_P_GHE * self.beta_GHE_delta_P
 
         # central loop energy consumption
-        m_ref_loop = max(m_loop_array)
+        m_ref_loop = max(self.m_loop_array)
         CL_delta_P = self.CL_P_per_m * self.length_CL
         for i in range(1, n_timesteps):
-            delta_P_loop = (CL_delta_P/m_ref_loop**2)*m_loop_array[i]**2
-            self.P_cl_cp[i] = m_loop_array[i] / (density * self.CL_efficiency) * delta_P_loop
+            delta_P_loop = (CL_delta_P/m_ref_loop**2)*self.m_loop_array[i]**2
+            self.P_cl_cp[i] = self.m_loop_array[i] / (density * self.CL_efficiency) * delta_P_loop
 
         # ISHX loop energy consumption
         for i in range(1, n_timesteps):
@@ -1098,17 +1187,6 @@ class GHEHPSystem:
                 m_ref_ISHX = max(ISHX.m_loop_ISHX_array)
                 delta_P_ISHX = (self.delta_P_ref_ISHX / m_ref_ISHX ** 2) * ISHX.m_loop_ISHX_array[i] ** 2
                 ISHX.P_ishx_cp[i] = ISHX.m_loop_ISHX_array[i] / (density * self.ISHX_cp_efficiency) * delta_P_ISHX * self.beta_ISHX_delta_P
-
-    def simulate(self):
-        # max_min_eft = []
-        # for zone in self.zones:
-        #     max_min_eft.append((max(zone.t_eft), min(zone.t_eft)))
-        # return max_min_eft
-
-        max_hp_eft = max(max(zone.t_eft) for zone in self.zones)
-        min_hp_eft = min(min(zone.t_eft) for zone in self.zones)
-
-        return max_hp_eft, min_hp_eft
 
     def createOutput(self):
         if self.configuration == "1-pipe":
@@ -1226,11 +1304,14 @@ class GHEHPSystem:
                 row.append(zone.P_zone_htg[i])
                 row.append(zone.P_zone_clg[i])
                 row.append(zone.P_zone_cp[i])
+                row.append(zone.m_zone_array[i])
 
             row.append(self.P_cl_cp[i])
+            row.append(self.m_loop_array[i])
 
             for GHE in self.GHEs:
                 row.append(GHE.P_ghe_cp[i])
+                row.append(GHE.m_ghe_array[i])
 
             for ISHX in self.ISHXs:
                 row.append(ISHX.P_ishx_cp[i])
@@ -1244,11 +1325,14 @@ class GHEHPSystem:
             column_names.append(f"Zone{j}_P_htg")
             column_names.append(f"Zone{j}_P_clg")
             column_names.append(f"Zone{j}_P_cp")
+            column_names.append(f"Zone{j}_mass_flow_rate")
 
         column_names.append(f"central_loop_P_cp")
+        column_names.append(f"central_loop_mass_flow_rate")
 
         for j, GHE in enumerate(self.GHEs):
             column_names.append(f"GHE{j}_P_cp")
+            column_names.append(f"GHE{j}_mass_flow_rate")
 
         for j, ISHX in enumerate(self.ISHXs):
             column_names.append(f"ISHX{j}_P_cp")
@@ -1263,6 +1347,7 @@ class GHEHPSystem:
 
         # Save to CSV
         self.df1.to_csv("results/Energy_consumption_results.csv")
+
 
     def UpdateConnections(self):
 
@@ -1550,43 +1635,6 @@ def FindItemByID(ID, objectlist):
             return item  # then return this one
     # next item
     return None  # couldn't find it
-
-
-System = GHEHPSystem()
-
-
-def main():
-    f1 = open("input_files/2-pipe_3ghe-6hp_system_w_ISHX_input.txt", 'r')
-    data = f1.readlines()  # read the entire file as a list of strings
-    f1.close()  # close the file  ... very important
-
-    f2 = open("input_files/find_design_bi_rectangle_single_u_tube.json", 'r')
-    json_data = json.load(f2)
-
-    System.read_GHEHPSystem_data(data)
-    System.read_data_from_json_file(json_data)
-
-    fluid, pipe, grout, soil, borehole, sim_params = System.read_data_from_json_file(json_data)
-    System.solveSystem(fluid, pipe, grout, soil, borehole, sim_params)
-    System.simulate()
-    System.createOutput()
-    System.output_file_energy_consumption()
-
-    # Draw
-    gl2d = gl2D(None, System.drawnetwork, width=2000, height=1500)
-    gl2d.setViewSize(-10, 80, -10, 100, False)
-    gl2d.glWait()  # wait for the user to close the window
-
-    print("Finished drawing 1")
-
-
-if __name__ == "__main__":
-    main()
-
-end = time.time()
-print(f"Execution time: {end - start:.4f} seconds")
-
-
 
 
 
