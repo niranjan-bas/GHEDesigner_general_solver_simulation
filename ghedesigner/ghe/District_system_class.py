@@ -13,14 +13,6 @@ from ghedesigner.utilities import eskilson_log_times
 from OpenGL.GL import *
 from OpenGL_2D_class_GLFW import gl2D, gl2DCircle, gl2DText,gl2DArrow, gl2DArc
 
-# import scipy as sp
-#
-# # for trying scipy.sparse solver
-# from scipy.sparse import csc_matrix
-# from scipy.sparse.linalg import spsolve
-# 
-# # for applying LU factorization
-# from scipy.linalg import lu_factor, lu_solve
 
 class GHE:
     def __init__(self):
@@ -66,7 +58,8 @@ class GHE:
         self.m_ghe_array = None
         self.H_n_ghe = None
         self.total_values_ghe = None
-
+        self.dq_ghe = None
+        self.log_lag = None
 
         # for output
         self.t_eft = None
@@ -160,38 +153,33 @@ class GHE:
             g_val = g(delta_log_time)
             c_n[i] = (1 / two_pi_k * g_val) + bhe_effective_resist
 
-            #print(f"Step {i}: g_val = {g_val}, bh_effective_resist = {bhe_effective_resist}")
-
         return c_n
 
-    def compute_history_term(self, i, time_array, ts, two_pi_k, g, tg, H_n_ghe, total_values_ghe, q_ghe):
+    def compute_history_term(self, i, time_array, ts_hr, two_pi_k, g, tg, H_n_ghe, total_values_ghe, q_ghe, dq_ghe, method):
         """
         Computes the history term H_n for this GHE at time index `i`.
         Updates self.total_values_ghe and self.H_n_ghe in place.
         """
-        if i == 0:
-            H_n_ghe[i] = tg
-            total_values_ghe[i] = 0
-            return
+        # Compute dimensionless time for all previous times t0 to t(i-2)
+        if method == "HOURLY":
+            dim_less_time = self.log_lag[i:1:-1]
+            dim1_less_time = self.log_lag[1]                                          # Contribution from the last time step only
+        else:
+            past_times = time_array[:i - 1]
+            dim_less_time = np.log((time_array[i] - past_times) / ts_hr)
+            dim1_less_time = np.log((time_array[i] - time_array[i - 1]) / ts_hr)      # Contribution from the last time step only
 
-        time_n = time_array[i]
-
-        # Compute dimensionless time for all indices from 1 to i-1
-        indices = np.arange(1, i)
-        dim_less_time = np.log((time_n - time_array[indices - 1]) / (ts / 3600.0))
-
-        # Compute contributions from all previous steps
-        delta_q_ghe = (q_ghe[indices] - q_ghe[indices - 1]) / two_pi_k
-        values = np.sum(delta_q_ghe * g(dim_less_time))
+        # Compute contributions from all previous load changes:
+        delta_q_ghe = dq_ghe[:i - 1]
+        g_vals = g(dim_less_time)
+        values = np.sum(delta_q_ghe * g_vals)
 
         total_values_ghe[i] = values
-
-        # Contribution from the last time step only
-        dim1_less_time = np.log((time_n - time_array[i - 1]) / (ts / 3600.0))
 
         H_n_ghe[i] = tg + total_values_ghe[i] - (
                 q_ghe[i - 1] / two_pi_k * g(dim1_less_time)
         )
+
         return H_n_ghe[i]
 
     def generate_GHE_matrix_row(self, matrix_size, c_n, i, GHE_inlet_index, mass_flow_ghe, cp, m_loop_ghe, H_n_ghe, m_loop, configuration):
@@ -294,23 +282,6 @@ class Zone:
         self.ISHX_ID = None
         self.inlet_index = None
 
-    # def q_net_clg(self):
-    #     """
-    #     Calculate net heat extracted/rejected each hour for the zone.
-    #     If either column is missing, default to zeros.
-    #     """
-    #     if "HPHtgLd_W" in self.df_zone.columns:
-    #         self.h = np.array(self.df_zone["HPHtgLd_W"])
-    #     else:
-    #         self.h = np.zeros(len(self.df_zone))
-    #
-    #     if "HPClgLd_W" in self.df_zone.columns:
-    #         self.c = np.array(self.df_zone["HPClgLd_W"])
-    #     else:
-    #         self.c = np.zeros(len(self.df_zone))
-    #
-    #     return self.c - self.h
-
     def initialize_load_arrays(self, n_years, method):
         """
         Read load columns once and store all arrays for later timestep access.
@@ -358,10 +329,6 @@ class Zone:
         """
         Calculate r1 and r2 for this zone based on entering fluid temperature and HP coefficients.
         """
-
-        # # Extract loads
-        # h = self.df_zone["HPHtgLd_W"].iloc[hour_index] if "HPHtgLd_W" in self.df_zone.columns else 0.0
-        # c = self.df_zone["HPClgLd_W"].iloc[hour_index] if "HPClgLd_W" in self.df_zone.columns else 0.0
 
         # Extract HP coefficients
         a_htg = self.HP.a_htg
@@ -446,10 +413,6 @@ class Zone:
         return rows, rhs_list
 
     def zone_energy_consumption(self, t_eft, i, m_flow_zone, density, cp_efficiency, beta_HP_delta_P, delta_P_HP):
-
-        # # Extract loads
-        # htg_load = self.df_zone["HPHtgLd_W"].iloc[i] if "HPHtgLd_W" in self.df_zone.columns else 0.0
-        # clg_load = self.df_zone["HPClgLd_W"].iloc[i] if "HPClgLd_W" in self.df_zone.columns else 0.0
 
         # Extract HP coefficients
         a_htg = self.HP.a_htg
@@ -636,8 +599,6 @@ class GHEHPSystem:
         self.beta_HP_delta_P = None
         self.P_cl_cp = None
         self.CL_P_per_m = None
-        self.n_years = 1
-        self.method = "HOURLY"
 
     def read_GHEHPSystem_data(self, data):
         next_matrix_line = 0
@@ -650,6 +611,10 @@ class GHEHPSystem:
 
             if keyword == 'title':
                 self.title = cells[1].replace("'", "")
+
+            if keyword == "simulation_info":
+                self.method = str(cells[1])
+                self.n_years = int(cells[2])
 
             if keyword == 'ghe':
                 thisghe = GHE()
@@ -678,14 +643,10 @@ class GHEHPSystem:
                     df = pd.read_csv(cells[7])
                     hours_per_year = len(df)
 
-                    # self.time_array = df['Hours'].values
-                    # self.time_array_size = len(self.time_array)
-
                     self.time_array = np.arange(0, hours_per_year * self.n_years + 1, dtype=float)
                     self.time_array_size = len(self.time_array)
 
                     thiszone = Zone()
-                    #thiszone.time_array = df['Hours'].values
                     thiszone.time_array = self.time_array
                     thiszone.time_array_size = len(thiszone.time_array)
                     thiszone.name = str(cells[1])
@@ -874,6 +835,7 @@ class GHEHPSystem:
             log_time = eskilson_log_times()
             self.gFunction = GHE.compute_g_functions()
             ts = GHE.bhe_eq.t_s
+            ts_hr = ts / 3600
             self.log_time = eskilson_log_times()
             cp = GHE.bhe.fluid.cp
             tg = GHE.bhe.soil.ugt
@@ -884,8 +846,14 @@ class GHEHPSystem:
 
         # Initializing the values
         for GHE in self.GHEs:
-            GHE.H_n_ghe, GHE.total_values_ghe, GHE.q_ghe = np.full((n_timesteps), tg), np.zeros(
-                n_timesteps), np.zeros(n_timesteps)
+            GHE.H_n_ghe, GHE.total_values_ghe, GHE.q_ghe, GHE.dq_ghe = np.full((n_timesteps), tg), np.zeros(
+                n_timesteps), np.zeros(n_timesteps), np.zeros(n_timesteps)
+
+        if self.method == "HOURLY":
+            for GHE in self.GHEs:
+                lags = np.arange(1, self.time_array_size + 1, dtype=float)
+                GHE.log_lag = np.zeros(self.time_array_size + 1)
+                GHE.log_lag[1:] = np.log(lags / ts_hr)
 
         # Initializing t_eft, t_mean, q_ghe, t_exit
         for zone in self.zones:
@@ -982,8 +950,6 @@ class GHEHPSystem:
                 for zone in self.zones:
                     if zone in ISHX.zones:
                         t_eft = zone.t_eft[i - 1]
-                        #zone.df_zone = zone.loads_file
-                        #q_net_clg = zone.q_net_clg()
                         m_zone = zone.zone_mass_flow_rate(t_eft, i)
                         zone.m_zone_array[i] = m_zone
                         total_hp_flow_ISHX += m_zone
@@ -994,8 +960,6 @@ class GHEHPSystem:
             for zone in self.zones:
                 if zone.ISHX_ID == "None":
                     t_eft = zone.t_eft[i - 1]
-                    # zone.df_zone = zone.loads_file
-                    # q_net_clg = zone.q_net_clg()
                     m_zone = zone.zone_mass_flow_rate(t_eft, i)
                     zone.m_zone_array[i] = m_zone
                     total_hp_flow += m_zone
@@ -1017,7 +981,6 @@ class GHEHPSystem:
                         m_loop = ISHX.m_loop_hp
                         t_eft = zone.t_eft[i - 1]
                         r1, r2 = zone.calculate_r1_r2(t_eft, i)
-                        #q_net_clg = zone.q_net_clg()
                         mass_flow_zone = zone.zone_mass_flow_rate(t_eft, i)
                         m_loop_zone += mass_flow_zone
                         this_zone_row, rhs = zone.generate_zone_matrix_row(matrix_size, zone.inlet_index, r1,
@@ -1060,8 +1023,8 @@ class GHEHPSystem:
                 mass_flow_ghe = m_loop * split_ratio
                 GHE.m_ghe_array[i] = mass_flow_ghe
                 c_n = GHE.c_n  # this is array, while using this in matrix we pick c_n[i], a single float number
-                H_n_ghe = GHE.compute_history_term(i, time_array, ts, two_pi_k, GHE.g, tg, GHE.H_n_ghe,
-                                                   GHE.total_values_ghe, q_ghe)
+                H_n_ghe = GHE.compute_history_term(i, time_array, ts_hr, two_pi_k, GHE.g, tg, GHE.H_n_ghe,
+                                                   GHE.total_values_ghe, GHE.q_ghe, GHE.dq_ghe, self.method)
                 m_loop_ghe += mass_flow_ghe
 
                 rows, rhs_values = GHE.generate_GHE_matrix_row(matrix_size, c_n, i, GHE_inlet_index, mass_flow_ghe, cp,
@@ -1085,29 +1048,10 @@ class GHEHPSystem:
                     matrix_rhs.append(rhs)
 
             # Solve the matrix using numpy.linalg.solve
+
             A = np.array(matrix_rows, dtype=float)
             B = np.array(matrix_rhs, dtype=float)
             X = np.linalg.solve(A, B)
-
-            # Solve the matrix using scipy.sparse.linalg
-            # A = np.array(matrix_rows, dtype=float)
-            # B = np.array(matrix_rhs, dtype=float)
-            #
-            # A_sp = csc_matrix(A)
-            # X = spsolve(A_sp, B)
-
-            #Solve the matrix using scipy.linalg.solve
-            # A = np.array(matrix_rows, dtype=float)
-            # B = np.array(matrix_rhs, dtype=float)
-            #
-            # X = sp.linalg.solve(A, B)
-
-            # # Solve the matrix using scipy LU factorization
-            # A = np.array(matrix_rows, dtype=float)
-            # B = np.array(matrix_rhs, dtype=float)
-            #
-            # lu, piv = lu_factor(A)
-            # X = lu_solve((lu, piv), B)
 
             # for extracting (assigning) values for 1-pipe and 2-pipe systems
             if self.configuration == "1-pipe":
@@ -1118,6 +1062,7 @@ class GHEHPSystem:
                     GHE.t_eft[i] = X[GHE.row_index]
                     GHE.t_mft[i] = X[GHE.row_index + 1]
                     GHE.q_ghe[i] = X[GHE.row_index + 2]
+                    GHE.dq_ghe[i - 1] = (GHE.q_ghe[i] - GHE.q_ghe[i - 1]) / (2 * np.pi * GHE.soil.k)
                     GHE.t_exft[i] = X[GHE.row_index + 3]
 
                 for ISHX in self.ISHXs:
@@ -1136,6 +1081,7 @@ class GHEHPSystem:
                     GHE.t_eft[i] = X[GHE_inlet_index]
                     GHE.t_mft[i] = X[GHE.row_index + 1]
                     GHE.q_ghe[i] = X[GHE.row_index + 2]
+                    GHE.dq_ghe[i - 1] = (GHE.q_ghe[i] - GHE.q_ghe[i - 1]) / (2 * np.pi * GHE.soil.k)
                     GHE.t_exft[i] = X[GHE.row_index + 3]
                     if GHE.downstream_device.type == "GHE":
                         GHE.t_merging_node[i] = X[GHE.downstream_device.row_index]
@@ -1148,7 +1094,6 @@ class GHEHPSystem:
 
             # zone energy consumption
             for zone in self.zones:
-                #q_net_clg = zone.q_net_clg()
                 t_eft = zone.t_eft[i - 1]
                 m_flow_zone = zone.zone_mass_flow_rate(t_eft, i)
                 cp_efficiency = self.HP_cp_efficiency
@@ -1347,7 +1292,6 @@ class GHEHPSystem:
 
         # Save to CSV
         self.df1.to_csv("results/Energy_consumption_results.csv")
-
 
     def UpdateConnections(self):
 

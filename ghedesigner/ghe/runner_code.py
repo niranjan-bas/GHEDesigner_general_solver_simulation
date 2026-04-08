@@ -6,7 +6,7 @@ import time
 System = GHEHPSystem()
 
 def main():
-    f1 = open("input_files/Real_system_input.txt", 'r')
+    f1 = open("input_files/Hourly_Real_system_input.txt", 'r')
     data = f1.readlines()  # read the entire file as a list of strings
     f1.close()  # close the file  ... very important
 
@@ -27,7 +27,6 @@ def main():
     gl2d.setViewSize(-10, 250, -10, 200, False)
     gl2d.glWait()  # wait for the user to close the window
 
-    #print("Finished drawing 1")
     print(f"Execution time: {end_time - start_time:.2f} seconds")
 
 
