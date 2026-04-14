@@ -1,9 +1,8 @@
 from ghedesigner.ghe.District_system_class import GHEHPSystem
+from ghedesigner.ghe.HP_hybrid_loads_processor import ProcessLoads
 import json
 from OpenGL_2D_class_GLFW import gl2D, gl2DCircle, gl2DText,gl2DArrow, gl2DArc
 import time
-
-System = GHEHPSystem()
 
 def main():
     f1 = open("input_files/Hourly_Real_system_input.txt", 'r')
@@ -14,6 +13,30 @@ def main():
     json_data = json.load(f2)
 
     start_time = time.time()
+
+    System = GHEHPSystem()
+
+    hybrid_start = time.time()
+    # Generate HP hybrid loads
+    hybrid_system = ProcessLoads()
+    hybrid_system.read_HP_load(data)
+    if hybrid_system.method == "HYBRID":
+        hybrid_system.read_data_from_json_file(json_data)
+        hybrid_system.prepare_bhe_for_hybrid()
+        hybrid_system.generate_hybrid_ground_loads()
+        hybrid_system.generate_common_timegrid()
+        hybrid_system.map_all_zones()
+        hybrid_system.create_HP_hybrid_loads()
+        hybrid_system.write_hybrid_output_csv()
+
+        # Pass hybrid results into simulation
+        System.hybrid_processor = hybrid_system
+
+    hybrid_end = time.time()
+
+    print(f"Hybrid load generation time: {hybrid_end - hybrid_start:.4f} seconds")
+
+    # Running main simulation
     System.read_GHEHPSystem_data(data)
     System.read_data_from_json_file(json_data)
     fluid, pipe, grout, soil, borehole, sim_params = System.read_data_from_json_file(json_data)

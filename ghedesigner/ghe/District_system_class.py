@@ -13,6 +13,8 @@ from ghedesigner.utilities import eskilson_log_times
 from OpenGL.GL import *
 from OpenGL_2D_class_GLFW import gl2D, gl2DCircle, gl2DText,gl2DArrow, gl2DArc
 
+from ghedesigner.ghe import HP_hybrid_loads_processor
+
 
 class GHE:
     def __init__(self):
@@ -600,6 +602,9 @@ class GHEHPSystem:
         self.P_cl_cp = None
         self.CL_P_per_m = None
 
+        # for hybrid loads processing
+        self.hybrid_processor = None
+
     def read_GHEHPSystem_data(self, data):
         next_matrix_line = 0
         for line in data:  # loop over all the lines
@@ -662,9 +667,8 @@ class GHEHPSystem:
                     self.zones.append(thiszone)
 
                 elif self.method == "HYBRID":
-                    df = pd.read_csv(cells[7])
 
-                    self.time_array = df['Hours'].values.astype(float)
+                    self.time_array = self.hybrid_processor.common_time
                     self.time_array_size = len(self.time_array)
 
                     thiszone = Zone()
@@ -676,10 +680,15 @@ class GHEHPSystem:
                     thiszone.inlet_nodeID = str(cells[4])
                     thiszone.outlet_nodeID = str(cells[5])
                     thiszone.HPmodel = str(cells[6])
-                    thiszone.loads_file = df
                     thiszone.matrix_line = next_matrix_line
                     next_matrix_line += 1
-                    thiszone.initialize_load_arrays(n_years=self.n_years, method=self.method)
+
+                    idx = len(self.zones)
+                    hybrid_zone = self.hybrid_processor.zones[idx]
+
+                    thiszone.h = hybrid_zone.q_htg_hybrid
+                    thiszone.c = hybrid_zone.q_clg_hybrid
+
                     self.zones.append(thiszone)
 
             if keyword == 'ishx':
@@ -1141,6 +1150,8 @@ class GHEHPSystem:
 
             for i in range(n_timesteps):
                 row = []
+                row.append(self.time_array[i])
+
                 for zone in self.zones:
                     row.append(zone.t_eft[i])
 
@@ -1158,7 +1169,7 @@ class GHEHPSystem:
                 data_rows.append(row)
 
             # Step 2: Create column labels
-            column_names = []
+            column_names = ["Time[hr]"]
 
             for j, zone in enumerate(self.zones):
                 column_names.append(f"Zone{j}_EFT[C]")
@@ -1184,6 +1195,8 @@ class GHEHPSystem:
 
             for i in range(n_timesteps):
                 row = []
+                row.append(self.time_array[i])
+
                 for zone in self.zones:
                     row.append(zone.t_eft[i])
                     row.append(zone.t_exft[i])
@@ -1203,7 +1216,7 @@ class GHEHPSystem:
                 data_rows.append(row)
 
             # Step 2: Create column labels
-            column_names = []
+            column_names = ["Time[hr]"]
 
             for j, zone in enumerate(self.zones):
                 column_names.append(f"Zone{j}_EFT[C]")
