@@ -243,7 +243,7 @@ class TestCreateInputFiles(GHEBaseTest):
         ghe.write_input_file(out_path)
 
         # get demo file
-        demo_file = self.demos_path / "find_design_bi_rectangle_single_u_tube.json"
+        demo_file = self.demos_path / "BALTIMORE_find_design_bi_rectangle_single_u_tube.json"
         d_demo = loads(demo_file.read_text())
 
         # get new file

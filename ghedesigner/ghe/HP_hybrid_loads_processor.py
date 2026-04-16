@@ -287,4 +287,12 @@ class ProcessLoads:
 
         step_df.to_csv(output_file, index=False)
 
+    def run_hybrid_pipeline(self, json_data):
+        self.read_data_from_json_file(json_data)
+        self.prepare_bhe_for_hybrid()
+        self.generate_hybrid_ground_loads()
+        self.generate_common_timegrid()
+        self.map_all_zones()
+        self.create_HP_hybrid_loads()
+        self.write_hybrid_output_csv()
 

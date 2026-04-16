@@ -5,11 +5,11 @@ from OpenGL_2D_class_GLFW import gl2D, gl2DCircle, gl2DText,gl2DArrow, gl2DArc
 import time
 
 def main():
-    f1 = open("input_files/Hourly_Real_system_input.txt", 'r')
+    f1 = open("input_files/Hybrid_Real_system_input.txt", 'r')
     data = f1.readlines()  # read the entire file as a list of strings
     f1.close()  # close the file  ... very important
 
-    f2 = open("input_files/find_design_bi_rectangle_single_u_tube.json", 'r')
+    f2 = open("input_files/BALTIMORE_find_design_bi_rectangle_single_u_tube.json", 'r')
     json_data = json.load(f2)
 
     start_time = time.time()
@@ -21,13 +21,7 @@ def main():
     hybrid_system = ProcessLoads()
     hybrid_system.read_HP_load(data)
     if hybrid_system.method == "HYBRID":
-        hybrid_system.read_data_from_json_file(json_data)
-        hybrid_system.prepare_bhe_for_hybrid()
-        hybrid_system.generate_hybrid_ground_loads()
-        hybrid_system.generate_common_timegrid()
-        hybrid_system.map_all_zones()
-        hybrid_system.create_HP_hybrid_loads()
-        hybrid_system.write_hybrid_output_csv()
+        hybrid_system.run_hybrid_pipeline(json_data)
 
         # Pass hybrid results into simulation
         System.hybrid_processor = hybrid_system
@@ -42,6 +36,7 @@ def main():
     fluid, pipe, grout, soil, borehole, sim_params = System.read_data_from_json_file(json_data)
     System.solveSystem(fluid, pipe, grout, soil, borehole, sim_params)
     end_time = time.time()
+
     System.createOutput()
     System.output_file_energy_consumption()
 

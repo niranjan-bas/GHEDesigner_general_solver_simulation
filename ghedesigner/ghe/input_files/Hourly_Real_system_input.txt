@@ -6,7 +6,7 @@ Title, '3ghe-6hp system'
 configuration, '1-pipe'
 
 #keyword,              method,     years
-simulation_info,       HOURLY,     20
+simulation_info,       HOURLY,     1
 
 # Building Data
 
