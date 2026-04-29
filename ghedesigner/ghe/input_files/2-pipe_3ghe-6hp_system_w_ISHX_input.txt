@@ -18,10 +18,10 @@ Building, Mediumoffice,     B3, b3z1, b3z2
 
 # keyword, name,             ISHX_ID,  id,     inlet_nodeID,      outlet_nodeID,       HPmodel,  loads_file
 Zone,      space_htg/clg,    ishx1,    b1z1,   n2,                n3,                  HP1,      building_loads/B1Z1.csv
-Zone,      space_htg/clg,    ishx2,    b1z2,   n6,                n7,                  HP4,      building_loads/B1Z2.csv
+Zone,      water_htg,        ishx2,    b1z2,   n6,                n7,                  HP4,      building_loads/B1Z2.csv
 Zone,      space_htg/clg,    None,     b2z1,   n18,               n19,                 HP2,      building_loads/B2Z1.csv
 Zone,      water_htg,        None,     b2z2,   n22,               n23,                 HP4,      building_loads/B2Z2.csv
-Zone,      water_htg,        None,     b3z1,   n26,               n27,                 HP3,      building_loads/B3Z1.csv
+Zone,      space_htg/clg,    None,     b3z1,   n26,               n27,                 HP3,      building_loads/B3Z1.csv
 Zone,      water_htg,        None,     b3z2,   n30,               n31,                 HP4,      building_loads/B3Z2.csv
 
 

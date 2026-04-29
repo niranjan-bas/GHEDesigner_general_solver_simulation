@@ -5,11 +5,11 @@ from OpenGL_2D_class_GLFW import gl2D, gl2DCircle, gl2DText,gl2DArrow, gl2DArc
 import time
 
 def main():
-    f1 = open("input_files/Hybrid_Real_system_input.txt", 'r')
+    f1 = open("input_files/1-pipe_3ghe-6hp_system_wo_ISHX_input.txt", 'r')
     data = f1.readlines()  # read the entire file as a list of strings
     f1.close()  # close the file  ... very important
 
-    f2 = open("input_files/BALTIMORE_find_design_bi_rectangle_single_u_tube.json", 'r')
+    f2 = open("input_files/DULUTH_find_design_bi_rectangle_single_u_tube.json", 'r')
     json_data = json.load(f2)
 
     start_time = time.time()
@@ -42,7 +42,7 @@ def main():
 
     # Draw
     gl2d = gl2D(None, System.drawnetwork, width=2000, height=1500)
-    gl2d.setViewSize(-10, 250, -10, 200, False)
+    gl2d.setViewSize(-10, 270, -10, 300, False)
     gl2d.glWait()  # wait for the user to close the window
 
     print(f"Execution time: {end_time - start_time:.2f} seconds")

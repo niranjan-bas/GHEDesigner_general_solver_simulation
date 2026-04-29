@@ -4,7 +4,8 @@ Title, '2-pipe 3ghe-6hp system_wo_pumping_station'
 
 configuration, '2-pipe'
 
-# Ground heat exchanger data
+#keyword,              method,     years
+simulation_info,       HOURLY,     1
 
 # Building Data
 
@@ -16,17 +17,17 @@ Building, Mediumoffice,     B3, b3z1, b3z2
 
 # Zone data
 
-# keyword, name,             ISHX_ID,  id,     inlet_nodeID,      outlet_nodeID,       HPmodel,  loads_file
-Zone,      space_htg/clg,    None,     b1z1,   n2,                n3,                  HP1,      building_loads/B1Z1.csv
-Zone,      space_htg/clg,    None,     b1z2,   n6,                n7,                  HP4,      building_loads/B1Z2.csv
-Zone,      space_htg/clg,    None,     b2z1,   n10,               n11,                 HP2,      building_loads/B2Z1.csv
-Zone,      water_htg,        None,     b2z2,   n14,               n15,                 HP4,      building_loads/B2Z2.csv
-Zone,      water_htg,        None,     b3z1,   n18,               n19,                 HP3,      building_loads/B3Z1.csv
-Zone,      water_htg,        None,     b3z2,   n22,               n23,                 HP4,      building_loads/B3Z2.csv
+# keyword, name,             ISHX_ID,  id,     inlet_nodeID,      outlet_nodeID,       HPmodel,  loads_file,                                     COP_htg,  COP_clg
+Zone,      space_htg/clg,    None,     b1z1,   n2,                n3,                  HP1,      building_loads/DULUTH/B1Z1_DULUTH_1yr.csv,      4.4,      4.5
+Zone,      water_htg,        None,     b1z2,   n6,                n7,                  HP4,      building_loads/DULUTH/B1Z2_DULUTH_1yr.csv,      3.7,      3.7
+Zone,      space_htg/clg,    None,     b2z1,   n10,               n11,                 HP2,      building_loads/DULUTH/B2Z1_DULUTH_1yr.csv,      4.4,      4.9
+Zone,      water_htg,        None,     b2z2,   n14,               n15,                 HP4,      building_loads/DULUTH/B2Z2_DULUTH_1yr.csv,      3.7,      3.7
+Zone,      space_htg/clg,    None,     b3z1,   n18,               n19,                 HP3,      building_loads/DULUTH/B3Z1_DULUTH_1yr.csv,      4.4,      4.9
+Zone,      water_htg,        None,     b3z2,   n22,               n23,                 HP4,      building_loads/DULUTH/B3Z2_DULUTH_1yr.csv,      3.7,      3.7
 
 
 #  keyword, id,    inlet_nodeID,  outlet_nodeID,   n_rows, n_cols, row_spacing (m), col_spacing (m),  height     m_flow_ghe_design
-GHE,        ghe1,  n28,           n29,             15,     10,     5,               5, 		      100,       50.63
+GHE,        ghe1,  n28,           n29,             15,     10,     5,               5, 		          100,       50.63
 GHE,        ghe2,  n32,           n33,             10,     8,      5,               5,                100,       27
 GHE,        ghe3,  n36,           n37,             10,     7,      5,               5,                100,       23.63
 
